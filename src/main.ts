@@ -60,7 +60,7 @@ let cam = {
 let collisions: { x: number; y: number }[] = [];
 const intersections = new Map<
   number,
-  { x: number; y: number; distance: number }
+  { x: number; y: number; distance: number; side: number }
 >();
 
 const fov = 60;
@@ -320,16 +320,19 @@ function collideRay({
   const maxDistance = 300;
   let found = false;
   let distance = 0;
+  let side = 0;
 
   while (!found && distance < maxDistance) {
     if (rayLength.x < rayLength.y) {
       mapCheck.x += step.x;
       distance = rayLength.x;
       rayLength.x += rayUnitStepSize.x * TILE_SIZE;
+      side = 0;
     } else {
       mapCheck.y += step.y;
       distance = rayLength.y;
       rayLength.y += rayUnitStepSize.y * TILE_SIZE;
+      side = 1;
     }
 
     if (
@@ -352,6 +355,7 @@ function collideRay({
       x: rayStart.x + rayDir.x * distance,
       y: rayStart.y + rayDir.y * distance,
       distance,
+      side,
     });
   }
 }
@@ -394,7 +398,7 @@ function drawPov() {
     const distance = intersection.distance;
     const lineHeight = 10000 / distance;
     const lineStart = (POV_HEIGHT - lineHeight) / 2;
-    povCtx.fillStyle = '#00f';
+    povCtx.fillStyle = intersection.side === 0 ? '#00f' : '#00e';
     povCtx.fillRect(col, lineStart, 1, lineHeight);
   }
 }
