@@ -1,39 +1,49 @@
 import { Input, InputControl, MouseCode, MouseInput } from './input';
 import { GameLoop } from './loop';
 
-const canvas = document.createElement('canvas');
-const ctx = canvas.getContext('2d');
+const MAP_WIDTH = 640;
+const MAP_HEIGHT = 480;
+const MAP_SCALE = 1;
 
-document.body.appendChild(canvas);
+const POV_WIDTH = 320;
+const POV_HEIGHT = 240;
+const POV_SCALE = 2;
 
-const SCALE = 1;
-
-const IW = 640;
-const IH = 480;
-const CW = 64;
-const PW = 8;
+const TILE_SIZE = 64;
+const PLAYER_SIZE = 8;
 
 const PLAYER_SPEED = 200;
 
-canvas.width = IW;
-canvas.height = IH;
+const mapCanvas = document.createElement('canvas');
+const mapCtx = mapCanvas.getContext('2d');
+document.body.appendChild(mapCanvas);
 
-canvas.style.background = '#000';
-canvas.style.width = `${IW * SCALE}px`;
+mapCanvas.width = MAP_WIDTH;
+mapCanvas.height = MAP_HEIGHT;
+mapCanvas.style.background = '#000';
+mapCanvas.style.width = `${MAP_WIDTH * MAP_SCALE}px`;
+
+const povCanvas = document.createElement('canvas');
+const povCtx = povCanvas.getContext('2d');
+document.body.appendChild(povCanvas);
+
+povCanvas.width = POV_WIDTH;
+povCanvas.height = POV_HEIGHT;
+povCanvas.style.width = `${POV_WIDTH * POV_SCALE}px`;
 
 const input = new Input();
 input.listen();
 
 const mouseInput = new MouseInput();
-mouseInput.listen(canvas);
+mouseInput.listen(mapCanvas);
 
 const loop = new GameLoop({
   onTick: tick,
 });
 
 const player = {
-  x: 3 * CW,
-  y: 3 * CW,
+  x: 3 * TILE_SIZE,
+  y: 3 * TILE_SIZE,
 };
 
 let dir = {
@@ -48,52 +58,65 @@ let cam = {
 };
 
 let collisions: { x: number; y: number }[] = [];
-let intersections: { x: number; y: number }[] = [];
+const intersections = new Map<
+  number,
+  { x: number; y: number; distance: number }
+>();
 
 const fov = 60;
 
 const map = [];
-for (let i = 0; i < IW; i += CW) {
+for (let i = 0; i < MAP_WIDTH; i += TILE_SIZE) {
   map.push([]);
-  for (let j = 0; j < IH; j += CW) {
-    map[i / CW].push(0);
+  for (let j = 0; j < MAP_HEIGHT; j += TILE_SIZE) {
+    map[i / TILE_SIZE].push(0);
   }
 }
 
 function drawGrid() {
-  ctx.strokeStyle = '#777';
-  for (let i = 0; i < IW; i += CW) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i, IH);
-    ctx.stroke();
+  mapCtx.strokeStyle = '#777';
+  for (let i = 0; i < MAP_WIDTH; i += TILE_SIZE) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(i, 0);
+    mapCtx.lineTo(i, MAP_HEIGHT);
+    mapCtx.stroke();
   }
-  for (let i = 0; i < IH; i += CW) {
-    ctx.beginPath();
-    ctx.moveTo(0, i);
-    ctx.lineTo(IW, i);
-    ctx.stroke();
+  for (let i = 0; i < MAP_HEIGHT; i += TILE_SIZE) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, i);
+    mapCtx.lineTo(MAP_WIDTH, i);
+    mapCtx.stroke();
   }
 }
 
 function drawPlayer() {
-  ctx.fillStyle = '#f00';
-  ctx.fillRect(player.x - PW / 2, player.y - PW / 2, PW, PW);
+  mapCtx.fillStyle = '#f00';
+  mapCtx.fillRect(
+    player.x - PLAYER_SIZE / 2,
+    player.y - PLAYER_SIZE / 2,
+    PLAYER_SIZE,
+    PLAYER_SIZE,
+  );
 }
 
 function drawTarget() {
   const point = mouseInput.getOverPoint();
 
-  ctx.fillStyle = '#0f0';
-  ctx.fillRect(point.x - PW / 2, point.y - PW / 2, PW, PW);
+  mapCtx.fillStyle = '#0f0';
+  mapCtx.fillRect(
+    point.x - PLAYER_SIZE / 2,
+    point.y - PLAYER_SIZE / 2,
+    PLAYER_SIZE,
+    PLAYER_SIZE,
+  );
 }
 
 function drawDir() {
-  ctx.strokeStyle = '#0f0';
-  ctx.beginPath();
-  ctx.moveTo(player.x, player.y);
-  ctx.lineTo(cam.x, cam.y);
-  ctx.stroke();
+  mapCtx.strokeStyle = '#0f0';
+  mapCtx.beginPath();
+  mapCtx.moveTo(player.x, player.y);
+  mapCtx.lineTo(cam.x, cam.y);
+  mapCtx.stroke();
 }
 
 function drawCam() {
@@ -108,12 +131,12 @@ function drawCam() {
     y: cam.y + (ry / rl) * camHw,
   };
 
-  ctx.strokeStyle = '#ffff00';
-  ctx.beginPath();
-  ctx.moveTo(cam.x, cam.y);
-  ctx.lineTo(camRight.x, camRight.y);
-  ctx.lineTo(player.x, player.y);
-  ctx.stroke();
+  mapCtx.strokeStyle = '#ffff00';
+  mapCtx.beginPath();
+  mapCtx.moveTo(cam.x, cam.y);
+  mapCtx.lineTo(camRight.x, camRight.y);
+  mapCtx.lineTo(player.x, player.y);
+  mapCtx.stroke();
 
   const lx = cam.y - player.y;
   const ly = -(cam.x - player.x);
@@ -124,36 +147,41 @@ function drawCam() {
     y: cam.y + (ly / ll) * camHw,
   };
 
-  ctx.strokeStyle = '#ffff00';
-  ctx.beginPath();
-  ctx.moveTo(cam.x, cam.y);
-  ctx.lineTo(camLeft.x, camLeft.y);
-  ctx.lineTo(player.x, player.y);
-  ctx.stroke();
+  mapCtx.strokeStyle = '#ffff00';
+  mapCtx.beginPath();
+  mapCtx.moveTo(cam.x, cam.y);
+  mapCtx.lineTo(camLeft.x, camLeft.y);
+  mapCtx.lineTo(player.x, player.y);
+  mapCtx.stroke();
 }
 
 function drawCollisions() {
-  ctx.strokeStyle = '#fff';
+  mapCtx.strokeStyle = '#fff';
   for (const collision of collisions) {
-    ctx.strokeRect(collision.x * CW, collision.y * CW, CW, CW);
+    mapCtx.strokeRect(
+      collision.x * TILE_SIZE,
+      collision.y * TILE_SIZE,
+      TILE_SIZE,
+      TILE_SIZE,
+    );
   }
 }
 
 function drawIntersections() {
-  ctx.strokeStyle = '#fff';
-  for (const intersection of intersections) {
-    ctx.beginPath();
-    ctx.arc(intersection.x, intersection.y, 5, 0, Math.PI * 2);
-    ctx.stroke();
+  mapCtx.strokeStyle = '#fff';
+  for (const intersection of intersections.values()) {
+    mapCtx.beginPath();
+    mapCtx.arc(intersection.x, intersection.y, 5, 0, Math.PI * 2);
+    mapCtx.stroke();
   }
 }
 
-function drawMap() {
-  ctx.fillStyle = '#00f';
-  for (let i = 0; i < IW; i += CW) {
-    for (let j = 0; j < IH; j += CW) {
-      if (map[i / CW][j / CW]) {
-        ctx.fillRect(i, j, CW, CW);
+function drawTiles() {
+  mapCtx.fillStyle = '#00f';
+  for (let i = 0; i < MAP_WIDTH; i += TILE_SIZE) {
+    for (let j = 0; j < MAP_HEIGHT; j += TILE_SIZE) {
+      if (map[i / TILE_SIZE][j / TILE_SIZE]) {
+        mapCtx.fillRect(i, j, TILE_SIZE, TILE_SIZE);
       }
     }
   }
@@ -201,8 +229,8 @@ function updateMap() {
   if (mouseInput.isHold(MouseCode.LeftClick)) {
     const point = mouseInput.getHoldPoint(MouseCode.LeftClick);
     const cell = {
-      x: Math.floor(point.x / CW),
-      y: Math.floor(point.y / CW),
+      x: Math.floor(point.x / TILE_SIZE),
+      y: Math.floor(point.y / TILE_SIZE),
     };
     map[cell.x][cell.y] = 1;
   }
@@ -210,16 +238,49 @@ function updateMap() {
 
 function updateCollisions() {
   collisions = [];
-  intersections = [];
+  intersections.clear();
 
+  const camHw = Math.tan((fov / 2) * (Math.PI / 180)) * dir.l;
+  const camStep = -(camHw * 2) / POV_WIDTH;
+
+  const lx = cam.y - player.y;
+  const ly = -(cam.x - player.x);
+  const ll = Math.sqrt(lx * lx + ly * ly);
+
+  const camLeft = {
+    x: cam.x + (lx / ll) * camHw,
+    y: cam.y + (ly / ll) * camHw,
+  };
+
+  for (let col = 0; col < POV_WIDTH + 1; col++) {
+    const point = {
+      x: camLeft.x + (lx / ll) * camStep * col,
+      y: camLeft.y + (ly / ll) * camStep * col,
+    };
+    collideRay({ col, point });
+  }
+}
+
+function collideRay({
+  col,
+  point,
+}: {
+  col: number;
+  point: { x: number; y: number };
+}) {
   const rayStart = {
     x: player.x,
     y: player.y,
   };
 
+  const x = point.x - rayStart.x;
+  const y = point.y - rayStart.y;
+
+  const l = Math.sqrt(x * x + y * y) || 1;
+
   const rayDir = {
-    x: dir.x,
-    y: dir.y,
+    x: x / l,
+    y: y / l,
   };
 
   const rayUnitStepSize = {
@@ -228,8 +289,8 @@ function updateCollisions() {
   };
 
   const mapCheck = {
-    x: Math.floor(player.x / CW),
-    y: Math.floor(player.y / CW),
+    x: Math.floor(player.x / TILE_SIZE),
+    y: Math.floor(player.y / TILE_SIZE),
   };
 
   const rayLength = {
@@ -241,17 +302,19 @@ function updateCollisions() {
 
   if (rayDir.x < 0) {
     step.x = -1;
-    rayLength.x = (rayStart.x - mapCheck.x * CW) * rayUnitStepSize.x;
+    rayLength.x = (rayStart.x - mapCheck.x * TILE_SIZE) * rayUnitStepSize.x;
   } else {
     step.x = 1;
-    rayLength.x = ((mapCheck.x + 1) * CW - rayStart.x) * rayUnitStepSize.x;
+    rayLength.x =
+      ((mapCheck.x + 1) * TILE_SIZE - rayStart.x) * rayUnitStepSize.x;
   }
   if (rayDir.y < 0) {
     step.y = -1;
-    rayLength.y = (rayStart.y - mapCheck.y * CW) * rayUnitStepSize.y;
+    rayLength.y = (rayStart.y - mapCheck.y * TILE_SIZE) * rayUnitStepSize.y;
   } else {
     step.y = 1;
-    rayLength.y = ((mapCheck.y + 1) * CW - rayStart.y) * rayUnitStepSize.y;
+    rayLength.y =
+      ((mapCheck.y + 1) * TILE_SIZE - rayStart.y) * rayUnitStepSize.y;
   }
 
   const maxDistance = 300;
@@ -262,11 +325,11 @@ function updateCollisions() {
     if (rayLength.x < rayLength.y) {
       mapCheck.x += step.x;
       distance = rayLength.x;
-      rayLength.x += rayUnitStepSize.x * CW;
+      rayLength.x += rayUnitStepSize.x * TILE_SIZE;
     } else {
       mapCheck.y += step.y;
       distance = rayLength.y;
-      rayLength.y += rayUnitStepSize.y * CW;
+      rayLength.y += rayUnitStepSize.y * TILE_SIZE;
     }
 
     if (
@@ -280,14 +343,15 @@ function updateCollisions() {
 
     if (map[mapCheck.x][mapCheck.y] === 1) {
       found = true;
-      collisions.push({ ...mapCheck });
+      // collisions.push({ ...mapCheck });
     }
   }
 
   if (found) {
-    intersections.push({
+    intersections.set(col, {
       x: rayStart.x + rayDir.x * distance,
       y: rayStart.y + rayDir.y * distance,
+      distance,
     });
   }
 }
@@ -300,11 +364,11 @@ function update({ deltaTime }: { deltaTime: number }) {
   updateCollisions();
 }
 
-function draw() {
-  ctx.clearRect(0, 0, IW, IH);
+function drawMap() {
+  mapCtx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
 
   drawGrid();
-  drawMap();
+  drawTiles();
   drawPlayer();
   drawTarget();
   drawDir();
@@ -313,12 +377,35 @@ function draw() {
   drawIntersections();
 }
 
+function drawPov() {
+  povCtx.clearRect(0, 0, POV_WIDTH, POV_HEIGHT);
+
+  povCtx.fillStyle = '#999';
+  povCtx.fillRect(0, 0, POV_WIDTH, POV_HEIGHT / 2);
+
+  povCtx.fillStyle = '#666';
+  povCtx.fillRect(0, POV_HEIGHT / 2, POV_WIDTH, POV_HEIGHT / 2);
+
+  for (let col = 0; col < POV_WIDTH; col++) {
+    const intersection = intersections.get(col);
+    if (!intersection) {
+      continue;
+    }
+    const distance = intersection.distance;
+    const lineHeight = 10000 / distance;
+    const lineStart = (POV_HEIGHT - lineHeight) / 2;
+    povCtx.fillStyle = '#00f';
+    povCtx.fillRect(col, lineStart, 1, lineHeight);
+  }
+}
+
 function tick({ deltaTime }: { deltaTime: number }) {
   input.update();
-  mouseInput.update({ x: 1 / SCALE, y: 1 / SCALE });
+  mouseInput.update({ x: 1 / MAP_SCALE, y: 1 / MAP_SCALE });
 
   update({ deltaTime });
-  draw();
+  drawMap();
+  drawPov();
 }
 
 async function main() {
