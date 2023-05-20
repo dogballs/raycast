@@ -4,6 +4,7 @@
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
+    "noImplicitAny": true,
     "target": "es6",
     "outDir": "dist",
     "rootDir": "src"

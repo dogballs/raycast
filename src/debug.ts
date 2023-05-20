@@ -1,6 +1,6 @@
 export class Debug {
   static drawLine(
-    ctx,
+    ctx: CanvasRenderingContext2D,
     { x: x1, y: y1 }: { x: number; y: number },
     { x: x2, y: y2 }: { x: number; y: number },
     { color = '#fff' }: { color?: string } = {},
@@ -13,7 +13,7 @@ export class Debug {
   }
 
   static drawCircle(
-    ctx,
+    ctx: CanvasRenderingContext2D,
     { x, y }: { x: number; y: number },
     { r = 5, color = '#fff' }: { r?: number; color?: string } = {},
   ) {
@@ -24,7 +24,7 @@ export class Debug {
   }
 
   static drawRect(
-    ctx,
+    ctx: CanvasRenderingContext2D,
     { x, y }: { x: number; y: number },
     { size = 5, color = '#fff' }: { size?: number; color?: string } = {},
   ) {
@@ -32,7 +32,13 @@ export class Debug {
     ctx.fillRect(x - size / 2, y - size / 2, size, size);
   }
 
-  static drawGrid(ctx, width, height, step, color = '#777') {
+  static drawGrid(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    step: number,
+    color = '#777',
+  ) {
     ctx.strokeStyle = color;
     for (let i = 0; i < width; i += step) {
       ctx.beginPath();

@@ -4,7 +4,7 @@ type GameLoopOptions = {
   deltaTimeLimit?: number;
   fps?: number;
   onTick?: (args: { deltaTime: number; lastTime: number }) => void;
-}
+};
 
 const DEFAULT_OPTIONS = {
   deltaTimeLimit: 1,
@@ -20,7 +20,7 @@ enum State {
 
 export class GameLoop {
   private options: GameLoopOptions;
-  private lastTimestamp = null;
+  private lastTimestamp: number = null;
   private requestedStop = false;
   private state = State.Idle;
 
@@ -47,7 +47,7 @@ export class GameLoop {
     this.state = State.StopRequested;
   }
 
-  private loop = (timestamp = null): void => {
+  private loop = (timestamp: number = null): void => {
     if (this.state === State.Idle) {
       return;
     }

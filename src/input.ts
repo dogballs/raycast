@@ -197,7 +197,7 @@ class KeyboardInputDevice implements InputDevice {
     return this.upCodes;
   }
 
-  private handleWindowKeyDown = (ev): void => {
+  private handleWindowKeyDown = (ev: KeyboardEvent): void => {
     const { keyCode } = ev;
 
     if (!this.listenedDownCodes.includes(keyCode)) {
@@ -205,7 +205,7 @@ class KeyboardInputDevice implements InputDevice {
     }
   };
 
-  private handleWindowKeyUp = (ev): void => {
+  private handleWindowKeyUp = (ev: KeyboardEvent): void => {
     const { keyCode } = ev;
 
     const index = this.listenedDownCodes.indexOf(keyCode);
@@ -222,7 +222,7 @@ class KeyboardInputDevice implements InputDevice {
 const GAMEPAD_AXIS_THRESHOLD = 0.8;
 
 class GamepadInputDevice implements InputDevice {
-  private deviceIndex: number = 0;
+  private deviceIndex = 0;
   private isListening = false;
   private downCodes: number[] = [];
   private holdCodes: number[] = [];
@@ -444,10 +444,10 @@ export class MouseInput {
     return this.overPoint;
   }
 
-  private handleWindowMouseDown = (ev) => {
+  private handleWindowMouseDown = (ev: MouseEvent) => {
     const { button: code } = ev;
 
-    const rect = ev.target.getBoundingClientRect();
+    const rect = (ev.target as HTMLElement).getBoundingClientRect();
     const x = ev.clientX - rect.left;
     const y = ev.clientY - rect.top;
 
@@ -457,7 +457,7 @@ export class MouseInput {
     }
   };
 
-  private handleWindowMouseUp = (ev) => {
+  private handleWindowMouseUp = (ev: MouseEvent) => {
     const { button: code } = ev;
 
     const index = this.listenedDownCodes.indexOf(code);
@@ -467,8 +467,8 @@ export class MouseInput {
     }
   };
 
-  private handleWindowMouseMove = (ev) => {
-    const rect = ev.target.getBoundingClientRect();
+  private handleWindowMouseMove = (ev: MouseEvent) => {
+    const rect = (ev.target as HTMLElement).getBoundingClientRect();
     const x = ev.clientX - rect.left;
     const y = ev.clientY - rect.top;
 

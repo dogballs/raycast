@@ -74,7 +74,7 @@ const intersections = new Map<
   }
 >();
 
-const map = [];
+const map: number[][] = [];
 for (let i = 0; i < MAP_WIDTH; i += TILE_SIZE) {
   map.push([]);
   for (let j = 0; j < MAP_HEIGHT; j += TILE_SIZE) {
