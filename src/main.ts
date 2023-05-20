@@ -1,5 +1,7 @@
 import { Input, InputControl, MouseCode, MouseInput } from './input';
 import { GameLoop } from './loop';
+import { Vector2 } from './vector';
+import { Debug } from './debug';
 
 const MAP_WIDTH = 640;
 const MAP_HEIGHT = 480;
@@ -13,6 +15,9 @@ const TILE_SIZE = 64;
 const PLAYER_SIZE = 8;
 
 const PLAYER_SPEED = 200;
+
+const FOV = 60;
+const FOV_DEPTH = 300;
 
 const mapCanvas = document.createElement('canvas');
 const mapCtx = mapCanvas.getContext('2d');
@@ -41,29 +46,33 @@ const loop = new GameLoop({
   onTick: tick,
 });
 
-const player = {
+const player = Vector2.from({
   x: 3 * TILE_SIZE,
   y: 3 * TILE_SIZE,
-};
+});
 
-let dir = {
+const dir = Vector2.from({
   x: 1,
   y: 0,
-  l: 0,
-};
+  // l: 0,
+});
 
-let cam = {
+const cam = Vector2.from({
   x: 0,
   y: 0,
-};
+});
 
 let collisions: { x: number; y: number }[] = [];
 const intersections = new Map<
   number,
-  { x: number; y: number; distance: number; side: number }
+  {
+    point: { x: number; y: number };
+    playerDistance: number;
+    side: number;
+    castBackPoint: { x: number; y: number };
+    castBackDistance: number;
+  }
 >();
-
-const fov = 60;
 
 const map = [];
 for (let i = 0; i < MAP_WIDTH; i += TILE_SIZE) {
@@ -74,53 +83,24 @@ for (let i = 0; i < MAP_WIDTH; i += TILE_SIZE) {
 }
 
 function drawGrid() {
-  mapCtx.strokeStyle = '#777';
-  for (let i = 0; i < MAP_WIDTH; i += TILE_SIZE) {
-    mapCtx.beginPath();
-    mapCtx.moveTo(i, 0);
-    mapCtx.lineTo(i, MAP_HEIGHT);
-    mapCtx.stroke();
-  }
-  for (let i = 0; i < MAP_HEIGHT; i += TILE_SIZE) {
-    mapCtx.beginPath();
-    mapCtx.moveTo(0, i);
-    mapCtx.lineTo(MAP_WIDTH, i);
-    mapCtx.stroke();
-  }
+  Debug.drawGrid(mapCtx, MAP_WIDTH, MAP_HEIGHT, TILE_SIZE);
 }
 
 function drawPlayer() {
-  mapCtx.fillStyle = '#f00';
-  mapCtx.fillRect(
-    player.x - PLAYER_SIZE / 2,
-    player.y - PLAYER_SIZE / 2,
-    PLAYER_SIZE,
-    PLAYER_SIZE,
-  );
+  Debug.drawRect(mapCtx, player, { size: PLAYER_SIZE, color: '#f00' });
 }
 
 function drawTarget() {
   const point = mouseInput.getOverPoint();
-
-  mapCtx.fillStyle = '#0f0';
-  mapCtx.fillRect(
-    point.x - PLAYER_SIZE / 2,
-    point.y - PLAYER_SIZE / 2,
-    PLAYER_SIZE,
-    PLAYER_SIZE,
-  );
+  Debug.drawRect(mapCtx, point, { size: PLAYER_SIZE, color: '#0f0' });
 }
 
 function drawDir() {
-  mapCtx.strokeStyle = '#0f0';
-  mapCtx.beginPath();
-  mapCtx.moveTo(player.x, player.y);
-  mapCtx.lineTo(cam.x, cam.y);
-  mapCtx.stroke();
+  Debug.drawLine(mapCtx, player, cam, { color: '#0f0' });
 }
 
 function drawCam() {
-  const camHw = Math.tan((fov / 2) * (Math.PI / 180)) * dir.l;
+  const camHw = Math.tan((FOV / 2) * (Math.PI / 180)) * FOV_DEPTH;
 
   const rx = -(cam.y - player.y);
   const ry = cam.x - player.x;
@@ -168,11 +148,11 @@ function drawCollisions() {
 }
 
 function drawIntersections() {
-  mapCtx.strokeStyle = '#fff';
   for (const intersection of intersections.values()) {
-    mapCtx.beginPath();
-    mapCtx.arc(intersection.x, intersection.y, 5, 0, Math.PI * 2);
-    mapCtx.stroke();
+    Debug.drawCircle(mapCtx, intersection.point);
+    // Debug.drawLine(mapCtx, intersection.point, intersection.castBackPoint, {
+    //   color: '#0f0',
+    // });
   }
 }
 
@@ -204,25 +184,13 @@ function updatePlayer({ deltaTime }: { deltaTime: number }) {
 }
 
 function updateDir() {
-  const overPoint = mouseInput.getOverPoint();
+  const overPoint = Vector2.from(mouseInput.getOverPoint());
 
-  const x = overPoint.x - player.x;
-  const y = overPoint.y - player.y;
-
-  const l = Math.sqrt(x * x + y * y) || 1;
-
-  dir = {
-    x: x / l,
-    y: y / l,
-    l,
-  };
+  dir.set(overPoint.sub(player).norm());
 }
 
 function updateCam() {
-  cam = {
-    x: player.x + dir.x * dir.l,
-    y: player.y + dir.y * dir.l,
-  };
+  cam.set(player.copy().add(dir.copy().mulScalar(FOV_DEPTH)));
 }
 
 function updateMap() {
@@ -240,34 +208,55 @@ function updateCollisions() {
   collisions = [];
   intersections.clear();
 
-  const camHw = Math.tan((fov / 2) * (Math.PI / 180)) * dir.l;
-  const camStep = -(camHw * 2) / POV_WIDTH;
+  const camHalfWidth = Math.tan((FOV / 2) * (Math.PI / 180)) * FOV_DEPTH;
+  const camStep = -(camHalfWidth * 2) / POV_WIDTH;
 
-  const lx = cam.y - player.y;
-  const ly = -(cam.x - player.x);
-  const ll = Math.sqrt(lx * lx + ly * ly);
+  const camLeftNorm = cam.copy().sub(player).ccw().norm();
 
-  const camLeft = {
-    x: cam.x + (lx / ll) * camHw,
-    y: cam.y + (ly / ll) * camHw,
-  };
+  const camLeft = cam.copy().add(camLeftNorm.copy().mulScalar(camHalfWidth));
+  const camRight = cam.copy().add(camLeftNorm.copy().mulScalar(-camHalfWidth));
 
-  for (let col = 0; col < POV_WIDTH + 1; col++) {
+  const playerLeft = camLeft.copy().sub(dir.copy().mulScalar(FOV_DEPTH));
+  const playerRight = camRight.copy().sub(dir.copy().mulScalar(FOV_DEPTH));
+
+  // Debug.drawCircle(mapCtx, camLeft);
+  // Debug.drawCircle(mapCtx, camRight);
+  // Debug.drawCircle(mapCtx, playerLeft);
+  // Debug.drawCircle(mapCtx, playerRight);
+
+  // Debug.drawLine(mapCtx, playerLeft, playerRight);
+
+  for (let col = 0; col < POV_WIDTH + 1; col += 1) {
     const point = {
-      x: camLeft.x + (lx / ll) * camStep * col,
-      y: camLeft.y + (ly / ll) * camStep * col,
+      x: camLeft.x + camLeftNorm.x * camStep * col,
+      y: camLeft.y + camLeftNorm.y * camStep * col,
     };
-    collideRay({ col, point });
+
+    // Debug.drawLine(mapCtx, player, point, { color: '#555' });
+    const ints = collideRay({ point });
+    if (ints.length) {
+      const ins = ints[0];
+
+      const castBackDistance = Vector2.from(ins).distanceToLine(
+        playerLeft,
+        playerRight,
+      );
+      const castBackPoint = Vector2.from(ins).sub(
+        dir.copy().mulScalar(castBackDistance),
+      );
+
+      intersections.set(col, {
+        point: { x: ins.x, y: ins.y },
+        playerDistance: ins.distance,
+        side: ins.side,
+        castBackDistance: castBackDistance,
+        castBackPoint,
+      });
+    }
   }
 }
 
-function collideRay({
-  col,
-  point,
-}: {
-  col: number;
-  point: { x: number; y: number };
-}) {
+function collideRay({ point }: { point: { x: number; y: number } }) {
   const rayStart = {
     x: player.x,
     y: player.y,
@@ -317,7 +306,7 @@ function collideRay({
       ((mapCheck.y + 1) * TILE_SIZE - rayStart.y) * rayUnitStepSize.y;
   }
 
-  const maxDistance = 300;
+  const maxDistance = FOV_DEPTH;
   let found = false;
   let distance = 0;
   let side = 0;
@@ -351,13 +340,17 @@ function collideRay({
   }
 
   if (found) {
-    intersections.set(col, {
-      x: rayStart.x + rayDir.x * distance,
-      y: rayStart.y + rayDir.y * distance,
-      distance,
-      side,
-    });
+    return [
+      {
+        x: rayStart.x + rayDir.x * distance,
+        y: rayStart.y + rayDir.y * distance,
+        distance,
+        side,
+      },
+    ];
   }
+
+  return [];
 }
 
 function update({ deltaTime }: { deltaTime: number }) {
@@ -369,8 +362,6 @@ function update({ deltaTime }: { deltaTime: number }) {
 }
 
 function drawMap() {
-  mapCtx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-
   drawGrid();
   drawTiles();
   drawPlayer();
@@ -395,7 +386,7 @@ function drawPov() {
     if (!intersection) {
       continue;
     }
-    const distance = intersection.distance;
+    const distance = intersection.castBackDistance;
     const lineHeight = 10000 / distance;
     const lineStart = (POV_HEIGHT - lineHeight) / 2;
     povCtx.fillStyle = intersection.side === 0 ? '#00f' : '#00e';
@@ -406,6 +397,8 @@ function drawPov() {
 function tick({ deltaTime }: { deltaTime: number }) {
   input.update();
   mouseInput.update({ x: 1 / MAP_SCALE, y: 1 / MAP_SCALE });
+
+  mapCtx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
 
   update({ deltaTime });
   drawMap();
