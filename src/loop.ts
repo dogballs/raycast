@@ -9,7 +9,7 @@ type GameLoopOptions = {
 const DEFAULT_OPTIONS = {
   deltaTimeLimit: 1,
   // requestAnimationFrame is usually 60 fps; in seconds
-  fps: 120,
+  fps: 60,
 };
 
 enum State {
